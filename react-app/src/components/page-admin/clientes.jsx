@@ -1,138 +1,192 @@
+// src/components/page-admin/clientes.jsx
 import React, { useState, useEffect } from "react";
 import "../Css/stylead.css";
 import Navbar from "../layouts/adminnav";
+
+import { db } from "../../config/firebaseConfig";
+import {
+  collection,
+  getDocs,
+  doc,
+  deleteDoc,
+  query,
+  where,
+} from "firebase/firestore";
 
 export default function Cliente() {
   const [clientes, setClientes] = useState([]);
   const [busqueda, setBusqueda] = useState("");
   const [filtrados, setFiltrados] = useState([]);
 
-  // 🔹 Cargar clientes desde el backend
+  // Cargar usuarios y contratos
   useEffect(() => {
-    fetch("/api/clientes")
-      .then((res) => res.json())
-      .then((data) => {
-        setClientes(data);
-        setFiltrados(data);
-      })
-      .catch((err) => console.error("Error al cargar clientes:", err));
+    const cargarDatos = async () => {
+      try {
+        // 1) usuarios
+        const usersSnap = await getDocs(collection(db, "usuarios"));
+        const usuarios = usersSnap.docs.map((d) => ({ id: d.id, ...d.data() }));
+
+        // 2) contratos
+        const contratosSnap = await getDocs(collection(db, "contratos"));
+        const contratos = contratosSnap.docs.map((d) => ({ id: d.id, ...d.data() }));
+
+        // Map: cliente_uid => array de contratos
+        const contratosPorCliente = {};
+        contratos.forEach((c) => {
+          if (!contratosPorCliente[c.cliente_uid])
+            contratosPorCliente[c.cliente_uid] = [];
+          contratosPorCliente[c.cliente_uid].push(c);
+        });
+
+        // Construir lista final
+        const lista = usuarios.map((u) => ({
+          id: u.id,
+          nombre: u.nombre || "",
+          apellidos:
+            u.apellidos ||
+            (contratosPorCliente[u.id] &&
+              contratosPorCliente[u.id][0]?.apellidos) ||
+            "",
+          email: u.email || "",
+          telefono:
+            (contratosPorCliente[u.id] &&
+              contratosPorCliente[u.id][0]?.telefono) ||
+            u.telefono ||
+            "",
+          direccion:
+            (contratosPorCliente[u.id] &&
+              contratosPorCliente[u.id][0]?.direccion) ||
+            u.direccion ||
+            "",
+          contratos: contratosPorCliente[u.id] || [],
+        }));
+
+        setClientes(lista);
+        setFiltrados(lista);
+      } catch (err) {
+        console.error("Error cargando clientes:", err);
+      }
+    };
+
+    cargarDatos();
   }, []);
 
-  // 🔹 Filtrar clientes por nombre o correo
+  // Filtrar
   const handleBuscar = (e) => {
     const valor = e.target.value.toLowerCase();
     setBusqueda(valor);
+
     setFiltrados(
       clientes.filter(
         (c) =>
-          c.nombre.toLowerCase().includes(valor) ||
-          c.apellido.toLowerCase().includes(valor) ||
-          c.correo.toLowerCase().includes(valor)
+          (c.nombre || "").toLowerCase().includes(valor) ||
+          (c.apellidos || "").toLowerCase().includes(valor) ||
+          (c.email || "").toLowerCase().includes(valor)
       )
     );
   };
 
-  // 🔹 (Opcional) Acciones para botones
-  const handleVer = (id) => {
-    alert(`Ver detalles del cliente ID: ${id}`);
-  };
+  // Eliminar cliente y contratos asociados
+  const eliminarCliente = async (clienteId) => {
+    if (
+      !window.confirm(
+        "¿Eliminar este cliente? Esta acción borra su cuenta y contratos asociados."
+      )
+    )
+      return;
 
-  const handleEditar = (id) => {
-    alert(`Editar cliente ID: ${id}`);
+    try {
+      // borrar usuario
+      await deleteDoc(doc(db, "usuarios", clienteId));
+
+      // borrar contratos asociados
+      const q = query(
+        collection(db, "contratos"),
+        where("cliente_uid", "==", clienteId)
+      );
+      const snap = await getDocs(q);
+      const batchDeletes = snap.docs.map((d) =>
+        deleteDoc(doc(db, "contratos", d.id))
+      );
+      await Promise.all(batchDeletes);
+
+      alert("Cliente eliminado.");
+      setClientes((prev) => prev.filter((c) => c.id !== clienteId));
+      setFiltrados((prev) => prev.filter((c) => c.id !== clienteId));
+    } catch (err) {
+      console.error(err);
+      alert("No se pudo eliminar.");
+    }
   };
 
   return (
     <>
       <Navbar>
-      <section className="clientes">
-        <h1>Gestión de Clientes</h1>
-        <p className="clientes-desc">
-          Administra la información de los clientes registrados en el sistema.
-          Desde aquí podrás agregar nuevos, editar sus datos o consultar su
-          estado actual.
-        </p>
+        <section className="clientes">
+          <h1>Gestión de Clientes</h1>
+          <p className="clientes-desc">
+            Consulta y elimina información de los clientes registrados.
+          </p>
 
-        {/* Barra de acciones */}
-        <div className="clientes-actions">
-          <button className="btn-agregar">+ Agregar Cliente</button>
-          <input
-            type="text"
-            placeholder="Buscar cliente..."
-            className="buscador"
-            value={busqueda}
-            onChange={handleBuscar}
-          />
-        </div>
+          {/* Barra de búsqueda */}
+          <div className="clientes-actions">
+            <input
+              type="text"
+              placeholder="Buscar cliente por nombre, apellido o correo..."
+              className="buscador"
+              value={busqueda}
+              onChange={handleBuscar}
+            />
+          </div>
 
-        {/* Tabla de clientes */}
-        <table className="clientes-table">
-          <thead>
-            <tr>
-              <th>ID Cliente</th>
-              <th>Nombre</th>
-              <th>Apellido</th>
-              <th>Correo</th>
-              <th>Teléfono</th>
-              <th>Contraseña</th>
-              <th>Dirección</th>
-              <th>Estado</th>
-              <th>Fecha de Registro</th>
-              <th>Última Actualización</th>
-              <th>Acciones</th>
-            </tr>
-          </thead>
-          <tbody>
-            {filtrados.length > 0 ? (
-              filtrados.map((cliente) => (
-                <tr key={cliente.id_cliente}>
-                  <td>{cliente.id_cliente}</td>
-                  <td>{cliente.nombre}</td>
-                  <td>{cliente.apellido}</td>
-                  <td>{cliente.correo}</td>
-                  <td>{cliente.telefono || "N/A"}</td>
-                  <td>••••••••</td>
-                  <td>{cliente.direccion || "N/A"}</td>
-                  <td>
-                    <span className={`estado ${cliente.estado}`}>
-                      {cliente.estado
-                        ? cliente.estado.charAt(0).toUpperCase() +
-                          cliente.estado.slice(1)
-                        : "Desconocido"}
-                    </span>
-                  </td>
-                  <td>
-                    {new Date(cliente.created_at).toISOString().split("T")[0]}
-                  </td>
-                  <td>
-                    {new Date(cliente.updated_at).toISOString().split("T")[0]}
-                  </td>
-                  <td>
-                    <button
-                      className="btn-ver"
-                      onClick={() => handleVer(cliente.id_cliente)}
-                    >
-                      Ver
-                    </button>
-                    <button
-                      className="btn-editar"
-                      onClick={() => handleEditar(cliente.id_cliente)}
-                    >
-                      Editar
-                    </button>
+          {/* Tabla */}
+          <table className="clientes-table">
+            <thead>
+              <tr>
+                <th>ID</th>
+                <th>Nombre</th>
+                <th>Apellidos</th>
+                <th>Correo</th>
+                <th>Teléfono</th>
+                <th>Dirección</th>
+                <th># Contratos</th>
+                <th>Acciones</th>
+              </tr>
+            </thead>
+
+            <tbody>
+              {filtrados.length > 0 ? (
+                filtrados.map((c) => (
+                  <tr key={c.id}>
+                    <td>{c.id}</td>
+                    <td>{c.nombre}</td>
+                    <td>{c.apellidos || "—"}</td>
+                    <td>{c.email}</td>
+                    <td>{c.telefono || "N/A"}</td>
+                    <td>{c.direccion || "N/A"}</td>
+                    <td>{(c.contratos && c.contratos.length) || 0}</td>
+                    <td>
+                      <button
+                        className="btn-eliminar"
+                        onClick={() => eliminarCliente(c.id)}
+                      >
+                        Eliminar
+                      </button>
+                    </td>
+                  </tr>
+                ))
+              ) : (
+                <tr>
+                  <td colSpan="8" style={{ textAlign: "center" }}>
+                    No hay clientes registrados.
                   </td>
                 </tr>
-              ))
-            ) : (
-              <tr>
-                <td colSpan="11" style={{ textAlign: "center" }}>
-                  No hay clientes registrados.
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </section>
-     </Navbar>
+              )}
+            </tbody>
+          </table>
+        </section>
+      </Navbar>
     </>
   );
 }
+

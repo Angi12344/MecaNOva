@@ -1,101 +1,74 @@
 import React, { useEffect, useState } from "react";
 import "../Css/style.css";
 import Usernav from "../layouts/usernav";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
+
+import { db } from "../../config/firebaseConfig";
+import { collection, getDocs } from "firebase/firestore";
 
 function Paquetes() {
-  // Estado para los paquetes
   const [paquetes, setPaquetes] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const navigate = useNavigate();
 
-  // Simulación temporal de carga (placeholder)
-  /*useEffect(() => {
-    // Aquí  pondrás la llamada a Firebase
-    // Ejemplo:
-    // import { collection, getDocs } from "firebase/firestore";
-    // const querySnapshot = await getDocs(collection(db, "paquetes"));
+  useEffect(() => {
+    const obtenerPaquetes = async () => {
+      try {
+        const querySnapshot = await getDocs(collection(db, "paquetes"));
+        const lista = querySnapshot.docs.map((d) => ({
+          paquete_id: d.id,
+          ...d.data(),
+        }));
 
-    const paquetesFake = [ //borara despues de la conexion
-      {
-        paquete_id: 1,
-        nombre: "Plan Básico",
-        descripcion: "Ideal para navegación ligera y redes sociales.",
-        velocidad: "50 Mbps",
-        precio_mensual: 299.0,
-        promocion: false,
-        beneficios: "Wi-Fi gratis, soporte 24/7",
-        activo: true,
-        imagen: "/imagenes/plan-basico.jpg",
-      },
-      {
-        paquete_id: 2,
-        nombre: "Plan Avanzado",
-        descripcion: "Perfecto para streaming y videollamadas.",
-        velocidad: "150 Mbps",
-        precio_mensual: 499.0,
-        promocion: true,
-        beneficios: "Instalación gratuita, router incluido",
-        activo: true,
-        imagen: "/imagenes/plan-avanzado.jpg",
-      },
-    ];
+        setPaquetes(lista.filter((p) => p.activo === true));
+      } catch (error) {
+        console.error("Error al obtener paquetes:", error);
+      }
+    };
+    obtenerPaquetes();
+  }, []);
 
-    setTimeout(() => {
-      setPaquetes(paquetesFake);
-      setLoading(false);
-    }, 1000); // Simula un retardo de red
-  }, []);*/
+  const irAContratar = (paquete) => {
+    navigate(`/contratar?paquete=${encodeURIComponent(paquete.nombre)}`);
+  };
 
-  // Renderizado condicional
-  /*if (loading) {
-    return <p>Cargando paquetes...</p>;
-  }
-*/
   return (
-<>
- <Usernav>
-    <section className="paquetes-section">
-        <div className="content-wrapper">
-      <h2 className="section-title">Nuestros Paquetes de Internet</h2>
-      <p className="section-subtitle">
-        Elige el plan que mejor se adapte a tus necesidades.
-      </p>
+    <>
+      <Usernav>
+        <section className="paquetes-section">
+          <div className="content-wrapper">
+            <h2 className="section-title">Nuestros Paquetes de Internet</h2>
 
-      <div className="paquetes-container">
-        {paquetes.map((paquete) => (
-          <Link
-            key={paquete.paquete_id}
-            to={`/contratar/${encodeURIComponent(paquete.nombre)}`}
-            className="paquete-card"
-          >
-            {paquete.imagen && (
-              <img
-                src={paquete.imagen}
-                alt={paquete.nombre}
-                className="paquete-imagen"
-              />
-            )}
+            <div className="paquetes-container">
+              {paquetes.map((paquete) => (
+                <div
+                  key={paquete.paquete_id}
+                  className="paquete-card paquete-hover"
+                  onClick={() => irAContratar(paquete)}
+                >
+                  <h3 className="paquete-nombre">{paquete.nombre}</h3>
 
-            <h3 className="paquete-nombre">{paquete.nombre}</h3>
-            <p className="paquete-velocidad">{paquete.velocidad}</p>
-            <p className="paquete-descripcion">{paquete.descripcion}</p>
+                  <p className="paquete-velocidad">⚡ {paquete.velocidad}</p>
 
-            <p className="paquete-precio">
-              ${paquete.precio_mensual.toFixed(2)}
-            </p>
+                  <p className="paquete-descripcion">{paquete.descripcion}</p>
 
-            <p className="paquete-beneficios">{paquete.beneficios}</p>
+                  <p className="paquete-precio">${paquete.precio_mensual.toFixed(2)} MXN</p>
 
-            {paquete.promocion && (
-              <span className="paquete-promocion">🎉 En promoción</span>
-            )}
-          </Link>
-        ))}
-      </div>
-      </div>
-    </section>
-    </Usernav>
-      </>
+                  <p className="paquete-beneficios">✔ {paquete.beneficios}</p>
+
+                  {paquete.promocion && (
+                    <span className="paquete-promocion">
+                      🎉 {paquete.promocion}
+                    </span>
+                  )}
+
+                  <button className="btn-contratar">Contratar ahora</button>
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
+      </Usernav>
+    </>
   );
 }
 

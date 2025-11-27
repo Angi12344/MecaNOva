@@ -41,9 +41,9 @@ function Usernav({children}){
             </div>
             <ul className="nav-links">
                     <li><Link to="/paquetes">Paquetes</Link></li>
-                    <li><Link to="/contratar">Contratación</Link></li> {/*to="/contratar/Plan%20Básico"*/}
+                    <li><Link to="/contratar">Contratar</Link></li> {/*to="/contratar/Plan%20Básico"*/}
                     <li><Link to="/ayuda">Ayuda</Link></li>
-                    <li><Link to="/tiket">Tiket</Link></li>
+                    <li><Link to="/tiket">Historial</Link></li>
 
                     
                     {esAdmin && (

@@ -2,201 +2,261 @@ import React, { useState, useEffect } from "react";
 import "../Css/stylead.css";
 import Navbar from "../layouts/adminnav";
 
+import { auth, db } from "../../config/firebaseConfig";
+import {
+  collection,
+  getDocs,
+  updateDoc,
+  deleteDoc,
+  doc,
+  setDoc
+} from "firebase/firestore";
+import { createUserWithEmailAndPassword, deleteUser } from "firebase/auth";
+
 export default function Admin() {
-  const [administradores, setAdmin] = useState([]);
+  const [administradores, setAdministradores] = useState([]);
+  const [editando, setEditando] = useState(null);
+
   const [formData, setFormData] = useState({
     nombre: "",
     apellido: "",
-    rol: "",
     correo: "",
+    rol: "",
     password: "",
     activo: true,
   });
-  const [success, setSuccess] = useState("");
+
   const usuario = JSON.parse(localStorage.getItem("usuario"));
 
-if (!usuario || usuario.rol !== "superadmin") {
-  return (
-     <Navbar>
-    <div className="bloqueo">
-      <h1>⛔ Acceso denegado</h1>
-      <p>Esta sección solo puede ser vista por usuarios SuperAdministrador.</p>
-    </div>
-    </Navbar>
-  );
-}
+  // 🚫 BLOQUEAR SI NO ES SUPERADMIN
+  if (!usuario || usuario.rol !== "superadmin") {
+    return (
+      <Navbar>
+        <div className="bloqueo">
+          <h1>⛔ Acceso denegado</h1>
+          <p>Esta sección solo puede ser vista por usuarios SuperAdministrador.</p>
+        </div>
+      </Navbar>
+    );
+  }
 
-  // 🔹 Cargar lista de administradores
+  // 📌 Cargar lista desde Firestore
   useEffect(() => {
-    fetch("/api/administradores")
-      .then((res) => res.json())
-      .then((data) => setAdmin(data))
-      .catch((err) => console.error("Error al cargar administradores:", err));
+    const cargarAdmins = async () => {
+      const snap = await getDocs(collection(db, "administradores"));
+      const lista = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+      setAdministradores(lista);
+    };
+    cargarAdmins();
   }, []);
 
-  // 🔹 Manejar cambios del formulario
   const handleChange = (e) => {
-    const { name, value, type, checked } = e.target;
+    const { name, value, checked, type } = e.target;
     setFormData({
       ...formData,
       [name]: type === "checkbox" ? checked : value,
     });
   };
 
-  // 🔹 Enviar formulario
+  // 📌 Registrar administrador
   const handleSubmit = async (e) => {
     e.preventDefault();
 
-    const response = await fetch("/api/administradores", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(formData),
-    });
+    try {
+      // 1️⃣ Crear usuario en Firebase Auth
+      const cred = await createUserWithEmailAndPassword(
+        auth,
+        formData.correo,
+        formData.password
+      );
 
-    if (response.ok) {
-      const nuevoAdmin = await response.json();
-      setAdmin([...administradores, nuevoAdmin]);
+      const uid = cred.user.uid;
+
+      // 2️⃣ Guardar en Firestore CON EL UID COMO ID
+      await setDoc(doc(db, "administradores", uid), {
+        uid,
+        nombre: formData.nombre,
+        apellido: formData.apellido,
+        correo: formData.correo,
+        rol: formData.rol,
+        activo: formData.activo,
+      });
+
+      alert("Administrador agregado correctamente ✔");
+
       setFormData({
         nombre: "",
         apellido: "",
-        rol: "",
         correo: "",
+        rol: "",
         password: "",
         activo: true,
       });
-      setSuccess("Administrador agregado correctamente.");
-      setTimeout(() => setSuccess(""), 3000);
-    } else {
-      alert("Error al agregar administrador");
+
+      window.location.reload();
+    } catch (err) {
+      console.error(err);
+      alert("Error al registrar administrador: " + err.message);
     }
   };
 
-  // 🔹 Eliminar administrador
-  const handleDelete = async (id) => {
+  // 📌 Abrir modal de edición
+  const abrirEditar = (admin) => {
+    setEditando(admin);
+    setFormData(admin);
+  };
+
+  const guardarEdicion = async () => {
+    try {
+      const ref = doc(db, "administradores", editando.id);
+      await updateDoc(ref, {
+        nombre: formData.nombre,
+        apellido: formData.apellido,
+        rol: formData.rol,
+        activo: formData.activo,
+      });
+
+      alert("Administrador actualizado ✔");
+      setEditando(null);
+      window.location.reload();
+    } catch (err) {
+      alert("Error al guardar cambios");
+    }
+  };
+
+  const eliminarAdmin = async (admin) => {
     if (!window.confirm("¿Eliminar este administrador?")) return;
 
-    const response = await fetch(`/api/administradores/${id}`, {
-      method: "DELETE",
-    });
+    try {
+      await deleteDoc(doc(db, "administradores", admin.id));
 
-    if (response.ok) {
-      setAdmin(administradores.filter((a) => a.id !== id));
-    } else {
-      alert("Error al eliminar administrador");
+      // 🔥 Si el admin es el usuario actual, eliminar de Auth
+      const user = auth.currentUser;
+      if (user && user.email === admin.correo) {
+        await deleteUser(user);
+      }
+
+      alert("Administrador eliminado");
+      window.location.reload();
+    } catch (err) {
+      alert("Error al eliminar");
+      console.error(err);
     }
   };
 
   return (
-    <>
-      <Navbar>
+    <Navbar>
       <div className="permisos">
-        <h1>Gestión de Permisos - Administradores</h1>
-        <p>
-          Administra los usuarios con rol de administrador. Solo los “super”
-          pueden modificar roles.
-        </p>
+        <h1>Gestión de Administradores</h1>
 
-        {success && <div className="alert success">{success}</div>}
-
+        {/* FORMULARIO */}
         <form onSubmit={handleSubmit} className="formulario">
           <h2>Registrar nuevo administrador</h2>
-          <input
-            type="text"
-            name="nombre"
-            placeholder="Nombre"
-            value={formData.nombre}
-            onChange={handleChange}
-            required
-          />
-          <input
-            type="text"
-            name="apellido"
-            placeholder="Apellido"
-            value={formData.apellido}
-            onChange={handleChange}
-            required
-          />
-          <select
-            name="rol"
-            value={formData.rol}
-            onChange={handleChange}
-            required
-          >
+
+          <input type="text" name="nombre" placeholder="Nombre"
+            value={formData.nombre} onChange={handleChange} required />
+
+          <input type="text" name="apellido" placeholder="Apellido"
+            value={formData.apellido} onChange={handleChange} required />
+
+          <select name="rol" value={formData.rol} onChange={handleChange} required>
             <option value="">Seleccionar rol</option>
-            <option value="super">Super</option>
             <option value="admin">Admin</option>
+            <option value="superadmin">Superadmin</option>
           </select>
-          <input
-            type="email"
-            name="correo"
-            placeholder="Correo electrónico"
-            value={formData.correo}
-            onChange={handleChange}
-            required
-          />
-          <input
-            type="password"
-            name="password"
-            placeholder="Contraseña"
-            value={formData.password}
-            onChange={handleChange}
-            required
-          />
-     <label className="check-flex">
-        <input
-        type="checkbox"
-        name="activo"
-        checked={formData.activo}
-        onChange={handleChange}
-            />Activo
+
+          <input type="email" name="correo" placeholder="Correo"
+            value={formData.correo} onChange={handleChange} required />
+
+          <input type="password" name="password" placeholder="Contraseña"
+            value={formData.password} onChange={handleChange} required />
+
+          <label className="check-flex">
+            <input type="checkbox" name="activo"
+              checked={formData.activo} onChange={handleChange} />
+            Activo
           </label>
-          <button type="submit" className="btn-primary">
-            Agregar
-          </button>
+
+          <button type="submit" className="btn-primary">Agregar</button>
         </form>
 
-        <h2>Lista de administradores</h2>
+        <h2>Lista de Administradores</h2>
+
         <table className="clientes-table">
           <thead>
             <tr>
-              <th>ID</th>
               <th>Nombre</th>
               <th>Apellido</th>
-              <th>Rol</th>
               <th>Correo</th>
+              <th>Rol</th>
               <th>Activo</th>
               <th>Acciones</th>
             </tr>
           </thead>
           <tbody>
-            {administradores.length > 0 ? (
-              administradores.map((admin) => (
-                <tr key={admin.id}>
-                  <td>{admin.id}</td>
-                  <td>{admin.nombre}</td>
-                  <td>{admin.apellido}</td>
-                  <td>{admin.rol}</td>
-                  <td>{admin.correo}</td>
-                  <td>{admin.activo ? "Sí" : "No"}</td>
-                  <td>
-                    <button
-                      className="btn-danger"
-                      onClick={() => handleDelete(admin.id)}
-                    >
-                      Eliminar
-                    </button>
-                  </td>
-                </tr>
-              ))
-            ) : (
-              <tr>
-                <td colSpan="7">No hay administradores registrados</td>
+            {administradores.map((a) => (
+              <tr key={a.id}>
+                <td>{a.nombre}</td>
+                <td>{a.apellido}</td>
+                <td>{a.correo}</td>
+                <td>{a.rol}</td>
+                <td>{a.activo ? "Sí" : "No"}</td>
+                <td>
+                  <button className="btn-editar" onClick={() => abrirEditar(a)}>Editar</button>
+                  <button className="btn-danger" onClick={() => eliminarAdmin(a)}>Eliminar</button>
+                </td>
               </tr>
-            )}
+            ))}
           </tbody>
         </table>
+
+        {/* MODAL EDITAR */}
+        {editando && (
+          <div className="modal">
+            <div className="modal-content">
+              <h2>Editar Administrador</h2>
+
+              <input
+                value={formData.nombre}
+                onChange={(e) => setFormData({ ...formData, nombre: e.target.value })}
+              />
+
+              <input
+                value={formData.apellido}
+                onChange={(e) => setFormData({ ...formData, apellido: e.target.value })}
+              />
+
+              <select
+                value={formData.rol}
+                onChange={(e) => setFormData({ ...formData, rol: e.target.value })}
+              >
+                <option value="admin">Admin</option>
+                <option value="superadmin">Superadmin</option>
+              </select>
+
+              <label>
+                <input
+                  type="checkbox"
+                  checked={formData.activo}
+                  onChange={(e) =>
+                    setFormData({ ...formData, activo: e.target.checked })
+                  }
+                />
+                Activo
+              </label>
+
+              <div className="modal-buttons">
+                <button className="btn-guardar" onClick={guardarEdicion}>
+                  Guardar
+                </button>
+                <button className="btn-cerrar" onClick={() => setEditando(null)}>
+                  Cerrar
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
-      </Navbar>
-    </>
+    </Navbar>
   );
 }

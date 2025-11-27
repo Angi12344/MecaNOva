@@ -10,7 +10,7 @@ export default function Homead() {
       <header className="hero">
         <div className="hero-content">
           <h1>
-            Bienvenido a <span className="highlight">MN.Admin</span>
+            Bienvenida eminencia <span className="highlight">Admin</span>
           </h1>
           <p>
             Plataforma de administración del sistema <strong>Conect@T</strong>,

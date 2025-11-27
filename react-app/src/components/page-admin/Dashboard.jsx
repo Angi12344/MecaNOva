@@ -1,3 +1,4 @@
+// src/components/page-admin/Dashboard.jsx
 import React, { useEffect, useState } from "react";
 import "../Css/stylead.css";
 import Navbar from "../layouts/adminnav";
@@ -15,7 +16,15 @@ import {
 } from "chart.js";
 import { Bar, Line } from "react-chartjs-2";
 
-// Registrar componentes de Chart.js
+// Firebase
+import { db } from "../../config/firebaseConfig";
+import {
+  collection,
+  onSnapshot,
+  getDocs,
+} from "firebase/firestore";
+
+// Registrar componentes
 ChartJS.register(
   CategoryScale,
   LinearScale,
@@ -28,34 +37,120 @@ ChartJS.register(
 );
 
 export default function Dashboard() {
-  // 🔹 Estados principales
   const [totalClientes, setTotalClientes] = useState(0);
   const [serviciosActivos, setServiciosActivos] = useState(0);
   const [ingresosMensuales, setIngresosMensuales] = useState(0);
-  const [ticketsAbiertos, setTicketsAbiertos] = useState(0);
 
-  // 🔹 Datos de las gráficas
   const [meses, setMeses] = useState([]);
   const [serviciosPorMes, setServiciosPorMes] = useState([]);
   const [ingresosPorMes, setIngresosPorMes] = useState([]);
 
-  // 🔹 Cargar datos desde backend
+  // Helper: últimos N meses
+  function generarUltimosMeses(n = 6) {
+    const res = [];
+    const fecha = new Date();
+    for (let i = n - 1; i >= 0; i--) {
+      const d = new Date(fecha.getFullYear(), fecha.getMonth() - i, 1);
+      res.push({
+        label: d.toLocaleString("default", { month: "short", year: "numeric" }),
+        year: d.getFullYear(),
+        month: d.getMonth(),
+      });
+    }
+    return res;
+  }
+
+  function keyYM(date) {
+    const d = date.toDate ? date.toDate() : date;
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+  }
+
   useEffect(() => {
-    fetch("/api/dashboard")
-      .then((res) => res.json())
-      .then((data) => {
-        setTotalClientes(data.totalClientes);
-        setServiciosActivos(data.serviciosActivos);
-        setIngresosMensuales(data.ingresosMensuales);
-        setTicketsAbiertos(data.ticketsAbiertos);
-        setMeses(data.meses);
-        setServiciosPorMes(data.serviciosPorMes);
-        setIngresosPorMes(data.ingresosPorMes);
-      })
-      .catch((err) => console.error("Error al cargar el dashboard:", err));
+    const mesesArr = generarUltimosMeses(6);
+    setMeses(mesesArr.map((m) => m.label));
+
+    // -----------------------
+    // TOTAL CLIENTES
+    // -----------------------
+    const unsubUsuarios = onSnapshot(collection(db, "usuarios"), (snap) => {
+      let docs = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+      let clientes = docs.filter((u) => u.rol ? u.rol === "cliente" : true);
+      setTotalClientes(clientes.length);
+    });
+
+    // -----------------------
+    // CONTRATOS Y PAGOS
+    // -----------------------
+    const unsubContratos = onSnapshot(collection(db, "contratos"), async (snap) => {
+      const contratos = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+
+      // Servicios activos
+      setServiciosActivos(contratos.filter((c) => c.estado === "activo").length);
+
+      // Cargar paquetes (para obtener precios si fuera necesario)
+      const paquetesSnap = await getDocs(collection(db, "paquetes"));
+      const paquetes = paquetesSnap.docs.map((p) => ({ id: p.id, ...p.data() }));
+
+      const mapPaquetes = {};
+      paquetes.forEach((p) => { if (p.nombre) mapPaquetes[p.nombre] = p; });
+
+      // -----------------------
+      // 1) INGRESOS MENSUALES REALES (solo pagos pagados)
+      // -----------------------
+      let totalIngresos = 0;
+
+      contratos.forEach((c) => {
+        (c.pagos || []).forEach((p) => {
+          if (p.pagado === true) {
+            totalIngresos += p.monto || 0;
+          }
+        });
+      });
+
+      setIngresosMensuales(totalIngresos);
+
+      // -----------------------
+      // 2) DATOS PARA GRÁFICAS POR MES
+      // -----------------------
+      const keys = mesesArr.map((m) => `${m.year}-${String(m.month + 1).padStart(2, "0")}`);
+
+      const servCount = {};   // contratos activos activados ese mes
+      const incomeCount = {}; // ingresos de pagos pagados ese mes
+
+      keys.forEach((k) => {
+        servCount[k] = 0;
+        incomeCount[k] = 0;
+      });
+
+      contratos.forEach((c) => {
+        // servicios activos por mes = fecha_activacion
+        if (c.estado === "activo" && c.fecha_activacion) {
+          const key = keyYM(c.fecha_activacion);
+          if (servCount[key] !== undefined) servCount[key]++;
+        }
+
+        // ingresos por mes = pagos pagados en ese mes
+        (c.pagos || []).forEach((p) => {
+          if (p.pagado === true) {
+            const key = keyYM(p.fecha_vencimiento);
+            if (incomeCount[key] !== undefined) {
+              incomeCount[key] += p.monto || 0;
+            }
+          }
+        });
+      });
+
+      setServiciosPorMes(keys.map((k) => servCount[k]));
+      setIngresosPorMes(keys.map((k) => incomeCount[k]));
+    });
+
+    return () => {
+      unsubUsuarios();
+      unsubContratos();
+    };
   }, []);
 
-  // 🔹 Configuración de la gráfica de servicios
+  // Gráfica servicios
   const serviciosData = {
     labels: meses,
     datasets: [
@@ -68,13 +163,7 @@ export default function Dashboard() {
     ],
   };
 
-  const serviciosOptions = {
-    responsive: true,
-    plugins: { legend: { display: false } },
-    scales: { y: { beginAtZero: true } },
-  };
-
-  // 🔹 Configuración de la gráfica de ingresos
+  // Gráfica ingresos
   const ingresosData = {
     labels: meses,
     datasets: [
@@ -82,7 +171,7 @@ export default function Dashboard() {
         label: "Ingresos ($)",
         data: ingresosPorMes,
         borderColor: "#f9c80e",
-        backgroundColor: "rgba(249, 200, 14, 0.3)",
+        backgroundColor: "rgba(249,200,14,0.3)",
         tension: 0.4,
         fill: true,
         borderWidth: 2,
@@ -90,81 +179,46 @@ export default function Dashboard() {
     ],
   };
 
-  const ingresosOptions = {
-    responsive: true,
-    plugins: { legend: { display: false } },
-    scales: { y: { beginAtZero: false } },
-  };
-
   return (
-    <>
-     <Navbar>
+    <Navbar>
       <section className="dashboard">
         <h1>Panel de Administración</h1>
-        <p className="dashboard-desc">
-          Visualiza los indicadores clave del sistema y el estado general de los
-          servicios.
-        </p>
 
-        {/* Tarjetas resumen */}
+        {/* Tarjetas */}
         <div className="dashboard-grid">
           <div className="card">
             <h2>Clientes</h2>
             <p className="value">{totalClientes}</p>
-            <span className="desc">Clientes registrados</span>
           </div>
 
           <div className="card">
             <h2>Servicios Activos</h2>
             <p className="value">{serviciosActivos}</p>
-            <span className="desc">Conectados actualmente</span>
           </div>
 
           <div className="card">
             <h2>Ingresos Mensuales</h2>
             <p className="value">
-              $
-              {ingresosMensuales.toLocaleString(undefined, {
+              ${ingresosMensuales.toLocaleString(undefined, {
                 minimumFractionDigits: 2,
-                maximumFractionDigits: 2,
               })}
             </p>
-            <span className="desc">Último período registrado</span>
           </div>
         </div>
 
-        <div className="dashboard-grid-tickets">
-          <div className="card-tickets">
-            <h2>Tickets Abiertos</h2>
-            <p className="value">{ticketsAbiertos}</p>
-            <span className="desc">En espera de resolución</span>
-          </div>
-          <div className="card-tickets">
-            <h2>Tickets en Proceso</h2>
-            <p className="value">{ticketsAbiertos}</p>
-            <span className="desc">En proceso de resolución</span>
-          </div>
-          <div className="card-tickets">
-            <h2>Tickets Cerrados</h2>
-            <p className="value">{ticketsAbiertos}</p>
-            <span className="desc">Ya Resueltos</span>
-          </div>
-        </div>
-
-        {/* Sección de gráficas */}
+        {/* Gráficas */}
         <div className="charts-section">
           <div className="chart-card">
             <h3>Servicios Activos por Mes</h3>
-            <Bar data={serviciosData} options={serviciosOptions} />
+            <Bar data={serviciosData} />
           </div>
 
           <div className="chart-card">
             <h3>Ingresos por Mes</h3>
-            <Line data={ingresosData} options={ingresosOptions} />
+            <Line data={ingresosData} />
           </div>
         </div>
       </section>
-      </Navbar>
-    </>
+    </Navbar>
   );
 }

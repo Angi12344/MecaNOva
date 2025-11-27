@@ -2,48 +2,102 @@ import React, { useState } from "react";
 import "../Css/style.css";
 import Usernav from "../layouts/usernav";
 
+import { db } from "../../config/firebaseConfig";
+import {
+  collection,
+  addDoc,
+  serverTimestamp,
+  query,
+  where,
+  getDocs
+} from "firebase/firestore";
+
+import emailjs from "@emailjs/browser";
+import { useNavigate } from "react-router-dom";
+
 function Ayuda() {
+  const navigate = useNavigate();
+  const usuario = JSON.parse(localStorage.getItem("usuario"));
+
   const [mostrarFormulario, setMostrarFormulario] = useState(false);
 
   const [formData, setFormData] = useState({
-    nombre: "",
-    correo: "",
+    nombre: usuario?.nombre || "",
+    correo: usuario?.email || "",
     numeroContrato: "",
-    domicilio: "",
+    domicilio: usuario?.direccion || "",
+    titulo: "",
     descripcion: "",
-    fecha: new Date().toISOString().split("T")[0], // Fecha automática
+    fecha: new Date().toISOString().split("T")[0],
   });
 
-  // Manejo del cambio en inputs
   const handleChange = (e) => {
     const { name, value } = e.target;
     setFormData({ ...formData, [name]: value });
   };
 
-  // Manejo del envío (más adelante conectará con Firebase)
-
-/*import { addDoc, collection } from "firebase/firestore";
-import { db } from "../firebaseConfig";
-
-await addDoc(collection(db, "reportes"), formData); */
-
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
 
-    // Simulación de envío
-    console.log("Reporte enviado:", formData);
+    try {
+      // 🔍 VALIDAR CONTRATO REAL
+      const contratosRef = collection(db, "contratos");
+      const q = query(
+        contratosRef,
+        where("numeroContrato", "==", formData.numeroContrato),
+        where("cliente_uid", "==", usuario.uid)
+      );
 
-    alert("✅ Tu reporte ha sido enviado correctamente.");
-    setFormData({
-      nombre: "",
-      correo: "",
-      numeroContrato: "",
-      domicilio: "",
-      titulo: "",
-      descripcion: "",
-      fecha: new Date().toISOString().split("T")[0],
-    });
-    setMostrarFormulario(false);
+      const snap = await getDocs(q);
+
+      if (snap.empty) {
+        alert("❌ El número de contrato NO existe o no pertenece a tu cuenta.");
+        return;
+      }
+
+      // ✔ Si llega aquí, el contrato sí existe, crear el reporte
+      await addDoc(collection(db, "reportes"), {
+        ...formData,
+        cliente_uid: usuario?.uid || null,
+        estado: "pendiente",
+        fecha_creacion: serverTimestamp(),
+      });
+
+      // ✔ Enviar correo con EmailJS
+      await emailjs.send(
+        "service_8nzlm6a",
+        "template_oourq2c",
+        {
+          to_email: formData.correo,
+          nombre: formData.nombre,
+          titulo: formData.titulo,
+          descripcion: formData.descripcion,
+          correo: formData.correo,
+          numeroContrato: formData.numeroContrato,
+          domicilio: formData.domicilio,
+          fecha: formData.fecha,
+        },
+        "E3VFmMyvk8j-KqQy8"
+      );
+
+      // Redirigir
+      navigate("/envemail");
+
+      // Reset
+      setFormData({
+        nombre: usuario?.nombre || "",
+        correo: usuario?.email || "",
+        numeroContrato: "",
+        domicilio: usuario?.direccion || "",
+        titulo: "",
+        descripcion: "",
+        fecha: new Date().toISOString().split("T")[0],
+      });
+
+    } catch (error) {
+      console.error("Error al enviar reporte:", error);
+      alert("❌ Ocurrió un error al enviar el reporte.");
+    }
   };
 
   return (
@@ -55,123 +109,53 @@ await addDoc(collection(db, "reportes"), formData); */
             Encuentra información útil o levanta un reporte de soporte.
           </p>
 
-          {/* Opciones de ayuda */}
           <div className="ayuda-opciones">
             <div className="ayuda-card">
-              <h3>¿Cómo contratar un paquete?</h3>
-              <p>
-                Primero <strong>inicia sesión</strong> luego dirígete a la sección <strong>“Paquetes”</strong>, elige el plan
-                que mejor se adapte a ti y presiona el botón de{" "}
-                <strong>“Contratar”</strong>. Luego llena el formulario con tus
-                datos.
-              </p>
-            </div>
-
-            <div className="ayuda-card">
-              <h3>¿Qué datos necesito para contratar?</h3>
-              <ul>
-                <li>Nombre completo</li>
-                <li>Correo electrónico</li>
-                <li>Teléfono y dirección</li>
-                <li>Paquete elegido</li>
-              </ul>
-            </div>
-
-            <div className="ayuda-card">
               <h3>¿Tienes un problema técnico?</h3>
-              <p>
-                Si tu conexión presenta fallos o necesitas asistencia, puedes
-                levantar un reporte desde aquí.
-              </p>
-              <button
-                className="app-btn"
-                onClick={() => setMostrarFormulario(!mostrarFormulario)}
-              >
+              <p>Si tu conexión presenta fallos, levanta un reporte aquí.</p>
+              <button className="app-btn" onClick={() => setMostrarFormulario(!mostrarFormulario)}>
                 {mostrarFormulario ? "Cerrar formulario" : "Levantar reporte"}
               </button>
             </div>
           </div>
 
-          {/* Formulario de reporte */}
           {mostrarFormulario && (
             <form className="reporte-form" onSubmit={handleSubmit}>
               <h3>Levantar un reporte</h3>
 
               <div className="form-group">
                 <label>Nombre:</label>
-                <input
-                  type="text"
-                  name="nombre"
-                  value={formData.nombre}
-                  onChange={handleChange}
-                  required
-                />
+                <input name="nombre" value={formData.nombre} onChange={handleChange} required />
               </div>
 
               <div className="form-group">
                 <label>Correo:</label>
-                <input
-                  type="email"
-                  name="correo"
-                  value={formData.correo}
-                  onChange={handleChange}
-                  required
-                />
+                <input type="email" name="correo" value={formData.correo} onChange={handleChange} required />
               </div>
 
               <div className="form-group">
                 <label>Número de contrato:</label>
-                <input
-                  type="text"
-                  name="numeroContrato"
-                  value={formData.numeroContrato}
-                  onChange={handleChange}
-                  required
-                />
+                <input name="numeroContrato" value={formData.numeroContrato} onChange={handleChange} required />
               </div>
 
               <div className="form-group">
                 <label>Domicilio:</label>
-                <input
-                  type="text"
-                  name="domicilio"
-                  value={formData.domicilio}
-                  onChange={handleChange}
-                  required
-                />
+                <input name="domicilio" value={formData.domicilio} onChange={handleChange} required />
               </div>
-                
+
               <div className="form-group">
-                <label>Titulo:</label>
-                <input
-                  type="text"
-                  name="titulo"
-                  value={formData.titulo}
-                  onChange={handleChange}
-                  required
-                />
+                <label>Título del reporte:</label>
+                <input name="titulo" value={formData.titulo} onChange={handleChange} required />
               </div>
 
               <div className="form-group">
                 <label>Descripción del problema:</label>
-                <textarea
-                  name="descripcion"
-                  rows="4"
-                  value={formData.descripcion}
-                  onChange={handleChange}
-                  required
-                ></textarea>
+                <textarea name="descripcion" rows="4" value={formData.descripcion} onChange={handleChange} required></textarea>
               </div>
 
               <div className="form-group">
-                <label>Fecha del reporte:</label>
-                <input
-                  type="text"
-                  name="fecha"
-                  value={formData.fecha}
-                  readOnly
-                  style={{ backgroundColor: "#eee" }}
-                />
+                <label>Fecha:</label>
+                <input name="fecha" value={formData.fecha} readOnly style={{ background: "#eee" }} />
               </div>
 
               <button type="submit">Enviar reporte</button>

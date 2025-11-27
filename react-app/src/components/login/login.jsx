@@ -3,39 +3,60 @@ import { useNavigate } from "react-router-dom";
 import { Link } from "react-router-dom";
 import "../Css/stylead.css";
 
+import { auth, db } from "../../config/firebaseConfig";
+import { signInWithEmailAndPassword } from "firebase/auth";
+import { doc, getDoc } from "firebase/firestore";
+
 export default function Login() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [showPassword, setShowPassword] = useState(false);
   const navigate = useNavigate();
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
 
-    // Validación simple
-    if (email === "admin@demo.com" && password === "12345") {
-      
-        localStorage.setItem("usuario", JSON.stringify({ nombre: "Administrador", rol: "admin" }));
-        window.dispatchEvent(new Event("storage"));
-        navigate("/homead");
-    } 
-    
-    else if(email === "cliente@prueba.com" && password === "12345"){
-      
-      localStorage.setItem("usuario", JSON.stringify({ nombre: "Cliente Demo", rol: "cliente" })); 
-      window.dispatchEvent(new Event("storage"));
-      navigate("/");
-    }
+    try {
+      const userCredential = await signInWithEmailAndPassword(auth, email, password);
 
-       else if (email === "superadmin@demo.com" && password === "12345") {
-      
-        localStorage.setItem("usuario", JSON.stringify({ nombre: "SuperAdministrador", rol: "superadmin" }));
-        window.dispatchEvent(new Event("storage"));
+      const uid = userCredential.user.uid;
+
+      let userData = null;
+
+      // Buscar en USUARIOS
+      const docRefUser = doc(db, "usuarios", uid);
+      const snapUser = await getDoc(docRefUser);
+
+      if (snapUser.exists()) {
+        userData = snapUser.data();
+      } else {
+        // Buscar en ADMINISTRADORES
+        const docRefAdmin = doc(db, "administradores", uid);
+        const snapAdmin = await getDoc(docRefAdmin);
+
+        if (snapAdmin.exists()) {
+          userData = snapAdmin.data();
+        } else {
+          alert("Usuario no encontrado.");
+          return;
+        }
+      }
+
+      localStorage.setItem("usuario", JSON.stringify({
+        uid,
+        nombre: userData.nombre,
+        rol: userData.rol,
+        email: userData.email || userData.correo
+      }));
+
+      if (userData.rol === "admin" || userData.rol === "superadmin") {
         navigate("/homead");
-    } 
-    
-    else  {
-      alert("Credenciales incorrectas");
+      } else {
+        navigate("/");
+      }
+
+    } catch (error) {
+      console.error(error);
+      alert("Credenciales incorrectas.");
     }
   };
 
@@ -46,10 +67,8 @@ export default function Login() {
         <p className="login-desc">Accede para ver todo el contenido</p>
 
         <form onSubmit={handleSubmit}>
-          {/* Grupo del correo */}
           <div className="form-group">
             <label>Correo Electrónico</label>
-            <div style={{ display: "flex", gap: "10px" }}>
             <input
               type="email"
               placeholder="ejemplo@correo.com"
@@ -57,39 +76,19 @@ export default function Login() {
               onChange={(e) => setEmail(e.target.value)}
               required
             />
-            </div>
           </div>
 
-          {/* Grupo de la contraseña */}
           <div className="form-group">
             <label>Contraseña</label>
-            <div style={{ display: "flex", gap: "10px" }}>
-              <input
-                type={showPassword ? "text" : "password"}
-                placeholder="Ingresa tu contraseña"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-                style={{ flex: 1 }}
-              />
-
-             {/* <button
-                type="button"
-                onClick={() => setShowPassword(!showPassword)}
-                style={{
-                  padding: "0 10px",
-                  borderRadius: "10px",
-                  border: "1px solid #ccc",
-                  cursor: "pointer",
-                  background: "#f0f0f0",
-                }}
-              >
-                {showPassword ? "🙈" : "👀"}
-              </button>*/}
-            </div>
+            <input
+              type="password"
+              placeholder="Ingresa tu contraseña"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              required
+            />
           </div>
 
-          {/* Botón */}
           <button className="btn-login" type="submit">
             Iniciar Sesión
           </button>
@@ -97,7 +96,7 @@ export default function Login() {
 
         <p className="login-desc" style={{ marginTop: "1.5rem" }}>
           ¿Aún no tienes cuenta?{" "}
-          <Link to="/registro" style={{ color: " #21af0e", fontWeight: "bold" }}>
+          <Link to="/registro" style={{ color: "#21af0e", fontWeight: "bold" }}>
             Regístrate
           </Link>
         </p>
@@ -105,3 +104,4 @@ export default function Login() {
     </div>
   );
 }
+

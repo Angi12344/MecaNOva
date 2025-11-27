@@ -11,8 +11,13 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@emailjs/browser": "^4.4.1",
+    "chart.js": "^4.5.1",
+    "firebase": "^12.6.0",
     "react": "^19.1.1",
-    "react-dom": "^19.1.1"
+    "react-chartjs-2": "^5.3.1",
+    "react-dom": "^19.1.1",
+    "react-router-dom": "^7.9.6"
   },
   "devDependencies": {
     "@eslint/js": "^9.36.0",

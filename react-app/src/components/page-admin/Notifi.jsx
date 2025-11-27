@@ -1,19 +1,44 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import "../Css/noti.css";
 
+import { db } from "../../config/firebaseConfig";
+import {
+  collection,
+  onSnapshot,
+  orderBy,
+  query,
+  updateDoc,
+  doc,
+} from "firebase/firestore";
+
 export default function NotificationButton() {
   const [open, setOpen] = useState(false);
+  const [notificaciones, setNotificaciones] = useState([]);
   const navigate = useNavigate();
 
-  const notifications = [
-    { id: 1, title: "Pago realizado por Cliente #3", link: "/historialPagos" },
-    { id: 2, title: "Nuevo Ticket de soporte", link: "/reportes" },
-    { id: 3, title: "Ticket #4 Finalizado", link: "/reportes" },
-    { id: 4, title: "Ticket #4 En Proceso", link: "/reportes"},
-  ];
+  // 🔥 Cargar notificaciones en tiempo real
+  useEffect(() => {
+    const q = query(
+      collection(db, "notificaciones"),
+      orderBy("fecha", "desc")
+    );
 
-  const handleClick = (link) => {
+    const unsub = onSnapshot(q, (snap) => {
+      const lista = snap.docs.map((d) => ({
+        id: d.id,
+        ...d.data(),
+      }));
+
+      setNotificaciones(lista);
+    });
+
+    return () => unsub();
+  }, []);
+
+  // 🔥 Marcar como leída + navegar
+  const handleClick = async (id, link) => {
+    await updateDoc(doc(db, "notificaciones", id), { leido: true });
     setOpen(false);
     navigate(link);
   };
@@ -21,22 +46,38 @@ export default function NotificationButton() {
   return (
     <div className="notification-container">
       <div className="notification-icon" onClick={() => setOpen(!open)}>
-        <span className="notification-count">{notifications.length}</span>
+        {notificaciones.filter((n) => !n.leido).length > 0 && (
+          <span className="notification-count">
+            {notificaciones.filter((n) => !n.leido).length}
+          </span>
+        )}
         🔔
       </div>
 
       {open && (
         <div className="notification-dropdown">
-          {notifications.map((n) => (
-            <div className="notification-item" key={n.id}>
-              <span>{n.title}</span>
-              <button className="btn-view" onClick={() => handleClick(n.link)}>
-                Ver
-              </button>
-            </div>
-          ))}
+          {notificaciones.length > 0 ? (
+            notificaciones.map((n) => (
+              <div
+                key={n.id}
+                className={`notification-item ${
+                  n.leido ? "leido" : "no-leido"
+                }`}
+              >
+                <div>
+                  <strong>{n.titulo}</strong>
+                  <p>{n.descripcion}</p>
+                </div>
 
-          {notifications.length === 0 && (
+                <button
+                  className="btn-view"
+                  onClick={() => handleClick(n.id, n.link)}
+                >
+                  Ver
+                </button>
+              </div>
+            ))
+          ) : (
             <p className="no-notifications">No hay notificaciones</p>
           )}
         </div>

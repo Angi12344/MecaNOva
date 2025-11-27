@@ -20,7 +20,7 @@ export default function Navbar({children}) {
   return (
     <div className="page-container">
     <nav className="navbar">
-      <div className="logo">MN.Admin</div>
+      <div className="logo">Admin Conect@T</div>
       <ul className="nav-links">
         <li>
           <NavLink to="/homead" className="nav-item">
@@ -44,22 +44,22 @@ export default function Navbar({children}) {
         </li>
         <li>
           <NavLink to="/dashboard" className="nav-item">
-            Panel
+            Dashboard
           </NavLink>
         </li>
                 <li>
           <NavLink to="/reportes" className="nav-item">
-            Tikets
+            Historial de reportes
           </NavLink>
         </li>
           <li>
           <NavLink to="/historialPagos" className="nav-item">
-            Historial Pagos
+            Historial de contratos
           </NavLink>
         </li>
           <li>
           <NavLink to="/" className="nav-item">
-            Pag.users
+            Página usuarios
           </NavLink>
         </li>
         <li>
@@ -88,4 +88,3 @@ export default function Navbar({children}) {
     </div>
   );
 }
-//.|. para el tec y la tarea

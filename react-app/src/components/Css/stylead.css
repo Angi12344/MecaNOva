@@ -708,3 +708,101 @@ footer {
     color: #006b00;
     border: 1px solid #b5e7b5;
 }
+
+/* Botones pequeños para tablas */
+.btn-tabla {
+    padding: 6px 12px !important;
+    border-radius: 6px !important;
+    font-size: 0.85rem !important;
+    font-weight: 600 !important;
+    cursor: pointer;
+    transition: .2s;
+}
+
+/* Botón activar */
+.btn-activar {
+    background: #1d8c2e;
+    color: white;
+}
+
+.btn-activar:hover {
+    background: #146a22;
+}
+
+/* Botón ver cronograma */
+.btn-crono {
+    background: #076edd;
+    color: white;
+}
+
+.btn-crono:hover {
+    background: #044c9d;
+}
+
+
+/* Estado de pagos */
+.estado-tag {
+  padding: 6px 10px;
+  border-radius: 6px;
+  font-weight: 600;
+  display: inline-block;
+}
+
+/* PAGADO */
+.estado-tag.pagado {
+  background: #c6f6d5;   /* verde suave */
+  color: #22543d;        /* verde oscuro */
+  border: 1px solid #9ae6b4;
+}
+
+/* PENDIENTE */
+.estado-tag.pendiente {
+  background: #ffeeba;  /* amarillo suave */
+  color: #7a5d00;       /* dorado oscuro */
+  border: 1px solid #f5c06b;
+}
+/* Botón Activar */
+.btn-activar {
+  background: #28a745; /* Verde */
+  color: white;
+  padding: 6px 12px;
+  font-size: 14px;
+  border-radius: 6px;
+  border: none;
+  cursor: pointer;
+  transition: 0.2s ease-in-out;
+}
+
+.btn-activar:hover {
+  background: #218838;
+  transform: scale(1.03);
+}
+
+/* Botón Ver (cronograma) */
+.btn-ver {
+  background: #007bff; /* Azul */
+  color: white;
+  padding: 6px 12px;
+  font-size: 14px;
+  border-radius: 6px;
+  border: none;
+  cursor: pointer;
+  transition: 0.2s ease-in-out;
+}
+
+.btn-ver:hover {
+  background: #0069d9;
+  transform: scale(1.03);
+}
+
+/* Ajustar botones dentro de la tabla */
+.clientes-table button {
+  margin: 2px;
+}
+
+/* Mostrar modal cuando tenga clase .show */
+.modal.show {
+  display: flex !important;
+  justify-content: center;
+  align-items: center;
+}

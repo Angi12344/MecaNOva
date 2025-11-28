@@ -68,13 +68,13 @@ export default function NotificationButton() {
                   <strong>{n.titulo}</strong>
                   <p>{n.descripcion}</p>
                 </div>
-
                 <button
                   className="btn-view"
-                  onClick={() => handleClick(n.id, n.link)}
+                  onClick={() => handleClick(n.id, n.link ?? "/")}
                 >
                   Ver
                 </button>
+
               </div>
             ))
           ) : (

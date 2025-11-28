@@ -11,11 +11,43 @@ import {
   doc,
   setDoc
 } from "firebase/firestore";
+
 import { createUserWithEmailAndPassword, deleteUser } from "firebase/auth";
 
 export default function Admin() {
+
+  // ============================
+  // VALIDAR PERMISOS
+  // ============================
+  const usuario = JSON.parse(localStorage.getItem("usuario"));
+
+  const ES_SUPER = usuario?.rol === "superadmin";
+  const ES_ADMIN = usuario?.rol === "admin";
+
+  if (!usuario) {
+    return (
+      <Navbar>
+        <h1>Debes iniciar sesión</h1>
+      </Navbar>
+    );
+  }
+
+  if (ES_ADMIN) {
+    return (
+      <Navbar>
+        <div className="bloqueo">
+          <h1>⛔ Acceso restringido</h1>
+          <p>No tienes permisos para gestionar administradores.</p>
+        </div>
+      </Navbar>
+    );
+  }
+
+  // ============================
+  // ESTADOS
+  // ============================
   const [administradores, setAdministradores] = useState([]);
-  const [editando, setEditando] = useState(null);
+  const [editando, setEditando] = useState(false);
 
   const [formData, setFormData] = useState({
     nombre: "",
@@ -26,21 +58,11 @@ export default function Admin() {
     activo: true,
   });
 
-  const usuario = JSON.parse(localStorage.getItem("usuario"));
+  const [idEdit, setIdEdit] = useState(null);
 
-  // 🚫 BLOQUEAR SI NO ES SUPERADMIN
-  if (!usuario || usuario.rol !== "superadmin") {
-    return (
-      <Navbar>
-        <div className="bloqueo">
-          <h1>⛔ Acceso denegado</h1>
-          <p>Esta sección solo puede ser vista por usuarios SuperAdministrador.</p>
-        </div>
-      </Navbar>
-    );
-  }
-
-  // 📌 Cargar lista desde Firestore
+  // ============================
+  // CARGAR LISTA
+  // ============================
   useEffect(() => {
     const cargarAdmins = async () => {
       const snap = await getDocs(collection(db, "administradores"));
@@ -50,6 +72,9 @@ export default function Admin() {
     cargarAdmins();
   }, []);
 
+  // ============================
+  // MANEJO INPUTS
+  // ============================
   const handleChange = (e) => {
     const { name, value, checked, type } = e.target;
     setFormData({
@@ -58,12 +83,13 @@ export default function Admin() {
     });
   };
 
-  // 📌 Registrar administrador
+  // ============================
+  // AGREGAR
+  // ============================
   const handleSubmit = async (e) => {
     e.preventDefault();
 
     try {
-      // 1️⃣ Crear usuario en Firebase Auth
       const cred = await createUserWithEmailAndPassword(
         auth,
         formData.correo,
@@ -72,7 +98,6 @@ export default function Admin() {
 
       const uid = cred.user.uid;
 
-      // 2️⃣ Guardar en Firestore CON EL UID COMO ID
       await setDoc(doc(db, "administradores", uid), {
         uid,
         nombre: formData.nombre,
@@ -83,33 +108,35 @@ export default function Admin() {
       });
 
       alert("Administrador agregado correctamente ✔");
-
-      setFormData({
-        nombre: "",
-        apellido: "",
-        correo: "",
-        rol: "",
-        password: "",
-        activo: true,
-      });
-
       window.location.reload();
     } catch (err) {
-      console.error(err);
-      alert("Error al registrar administrador: " + err.message);
+      alert("Error: " + err.message);
     }
   };
 
-  // 📌 Abrir modal de edición
+  // ============================
+  // ABRIR EDICIÓN
+  // ============================
   const abrirEditar = (admin) => {
-    setEditando(admin);
-    setFormData(admin);
+    setEditando(true);
+    setIdEdit(admin.id);
+
+    setFormData({
+      nombre: admin.nombre,
+      apellido: admin.apellido,
+      correo: admin.correo,
+      rol: admin.rol,
+      password: "",
+      activo: admin.activo,
+    });
   };
 
+  // ============================
+  // GUARDAR EDICIÓN
+  // ============================
   const guardarEdicion = async () => {
     try {
-      const ref = doc(db, "administradores", editando.id);
-      await updateDoc(ref, {
+      await updateDoc(doc(db, "administradores", idEdit), {
         nombre: formData.nombre,
         apellido: formData.apellido,
         rol: formData.rol,
@@ -117,20 +144,21 @@ export default function Admin() {
       });
 
       alert("Administrador actualizado ✔");
-      setEditando(null);
       window.location.reload();
     } catch (err) {
-      alert("Error al guardar cambios");
+      alert("Error al actualizar");
     }
   };
 
+  // ============================
+  // ELIMINAR
+  // ============================
   const eliminarAdmin = async (admin) => {
     if (!window.confirm("¿Eliminar este administrador?")) return;
 
     try {
       await deleteDoc(doc(db, "administradores", admin.id));
 
-      // 🔥 Si el admin es el usuario actual, eliminar de Auth
       const user = auth.currentUser;
       if (user && user.email === admin.correo) {
         await deleteUser(user);
@@ -140,10 +168,12 @@ export default function Admin() {
       window.location.reload();
     } catch (err) {
       alert("Error al eliminar");
-      console.error(err);
     }
   };
 
+  // ============================
+  // RENDER
+  // ============================
   return (
     <Navbar>
       <div className="permisos">
@@ -249,7 +279,7 @@ export default function Admin() {
                 <button className="btn-guardar" onClick={guardarEdicion}>
                   Guardar
                 </button>
-                <button className="btn-cerrar" onClick={() => setEditando(null)}>
+                <button className="btn-cerrar" onClick={() => setEditando(false)}>
                   Cerrar
                 </button>
               </div>

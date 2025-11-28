@@ -13,9 +13,33 @@ import {
 } from "firebase/firestore";
 
 export default function Paquetesad() {
+  
+  const usuario = JSON.parse(localStorage.getItem("usuario"));
+  const ES_SUPER = usuario?.rol === "superadmin";
+  const ES_ADMIN = usuario?.rol === "admin";
+
+  if (!usuario) {
+    return (
+      <Navbar>
+        <h1>Debes iniciar sesión</h1>
+      </Navbar>
+    );
+  }
+
+  if (ES_ADMIN) {
+    return (
+      <Navbar>
+        <div className="bloqueo">
+          <h1>⛔ Acceso denegado</h1>
+          <p>No tienes permisos para gestionar paquetes.</p>
+        </div>
+      </Navbar>
+    );
+  }
+
   const [paquetes, setPaquetes] = useState([]);
-  const [editando, setEditando] = useState(false); // <- Nuevo
-  const [paqueteIdEdit, setPaqueteIdEdit] = useState(null); // <- Nuevo
+  const [editando, setEditando] = useState(false);
+  const [paqueteIdEdit, setPaqueteIdEdit] = useState(null);
 
   const [formData, setFormData] = useState({
     nombre: "",
@@ -26,15 +50,9 @@ export default function Paquetesad() {
     beneficios: "",
   });
 
-  // ============================
-  //   CARGAR PAQUETES
-  // ============================
   const cargarPaquetes = async () => {
     const querySnapshot = await getDocs(collection(db, "paquetes"));
-    const lista = querySnapshot.docs.map((d) => ({
-      id: d.id,
-      ...d.data(),
-    }));
+    const lista = querySnapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
     setPaquetes(lista);
   };
 
@@ -42,238 +60,137 @@ export default function Paquetesad() {
     cargarPaquetes();
   }, []);
 
-  // ============================
-  //   MANEJAR INPUTS
-  // ============================
   const handleChange = (e) => {
     const { name, value } = e.target;
     setFormData({ ...formData, [name]: value });
   };
 
-  // ============================
-  //   AGREGAR NUEVO PAQUETE
-  // ============================
   const handleSubmit = async (e) => {
     e.preventDefault();
 
-    try {
-      await addDoc(collection(db, "paquetes"), {
-        ...formData,
-        precio_mensual: Number(formData.precio_mensual),
-        activo: true,
-        duracion_contrato: "12 meses",
-        fecha_creacion: new Date(),
-      });
+    await addDoc(collection(db, "paquetes"), {
+      ...formData,
+      precio_mensual: Number(formData.precio_mensual),
+      activo: true,
+      fecha_creacion: new Date(),
+    });
 
-      alert("Paquete agregado con éxito");
-
-      setFormData({
-        nombre: "",
-        velocidad: "",
-        descripcion: "",
-        precio_mensual: "",
-        promocion: "",
-        beneficios: "",
-      });
-
-      cargarPaquetes();
-    } catch (error) {
-      console.error("Error al agregar paquete:", error);
-    }
-  };
-
-  // ============================
-  //   ELIMINAR PAQUETE
-  // ============================
-  const handleDelete = async (id) => {
-    if (!window.confirm("¿Eliminar este paquete?")) return;
-
-    try {
-      await deleteDoc(doc(db, "paquetes", id));
-      cargarPaquetes();
-    } catch (error) {
-      console.error("Error:", error);
-    }
-  };
-
-  // ============================
-  //   ENTRAR EN MODO EDITAR
-  // ============================
-  const handleEdit = (paquete) => {
-    setEditando(true);
-    setPaqueteIdEdit(paquete.id);
+    alert("Paquete agregado ✔");
+    cargarPaquetes();
 
     setFormData({
-      nombre: paquete.nombre,
-      velocidad: paquete.velocidad,
-      descripcion: paquete.descripcion,
-      precio_mensual: paquete.precio_mensual,
-      promocion: paquete.promocion || "",
-      beneficios: paquete.beneficios || "",
+      nombre: "",
+      velocidad: "",
+      descripcion: "",
+      precio_mensual: "",
+      promocion: "",
+      beneficios: "",
     });
   };
 
-  // ============================
-  //   GUARDAR EDICIÓN
-  // ============================
+  const handleEdit = (p) => {
+    setEditando(true);
+    setPaqueteIdEdit(p.id);
+    setFormData({
+      nombre: p.nombre,
+      velocidad: p.velocidad,
+      descripcion: p.descripcion,
+      precio_mensual: p.precio_mensual,
+      promocion: p.promocion,
+      beneficios: p.beneficios,
+    });
+  };
+
   const handleUpdate = async (e) => {
     e.preventDefault();
 
-    try {
-      await updateDoc(doc(db, "paquetes", paqueteIdEdit), {
-        ...formData,
-        precio_mensual: Number(formData.precio_mensual),
-      });
+    await updateDoc(doc(db, "paquetes", paqueteIdEdit), {
+      ...formData,
+      precio_mensual: Number(formData.precio_mensual),
+    });
 
-      alert("Paquete actualizado correctamente");
+    alert("Paquete actualizado ✔");
 
-      setEditando(false);
-      setPaqueteIdEdit(null);
+    setEditando(false);
+    cargarPaquetes();
 
-      setFormData({
-        nombre: "",
-        velocidad: "",
-        descripcion: "",
-        precio_mensual: "",
-        promocion: "",
-        beneficios: "",
-      });
+    setFormData({
+      nombre: "",
+      velocidad: "",
+      descripcion: "",
+      precio_mensual: "",
+      promocion: "",
+      beneficios: "",
+    });
+  };
 
-      cargarPaquetes();
-    } catch (error) {
-      console.error("Error al editar:", error);
-    }
+  const handleDelete = async (id) => {
+    if (!window.confirm("¿Eliminar paquete?")) return;
+    await deleteDoc(doc(db, "paquetes", id));
+    cargarPaquetes();
   };
 
   return (
-    <>
-      <Navbar>
-        <div className="clientes">
-          <h1>Gestión de Paquetes</h1>
+    <Navbar>
+      <div className="clientes">
+        <h1>Gestión de Paquetes</h1>
 
-          {/* FORM NUEVO Y EDITAR */}
-          <form
-            onSubmit={editando ? handleUpdate : handleSubmit}
-            className="formulario"
-          >
-            <h2>{editando ? "Editar Paquete" : "Agregar nuevo paquete"}</h2>
+        <form
+          onSubmit={editando ? handleUpdate : handleSubmit}
+          className="formulario"
+        >
+          <h2>{editando ? "Editar paquete" : "Agregar nuevo paquete"}</h2>
 
-            <input
-              type="text"
-              name="nombre"
-              placeholder="Nombre"
-              value={formData.nombre}
-              onChange={handleChange}
-              required
-            />
+          <input name="nombre" value={formData.nombre} onChange={handleChange} placeholder="Nombre" required />
+          <input name="velocidad" value={formData.velocidad} onChange={handleChange} placeholder="Velocidad" required />
+          <textarea name="descripcion" value={formData.descripcion} onChange={handleChange} placeholder="Descripción" required />
+          <input type="number" name="precio_mensual" value={formData.precio_mensual} onChange={handleChange} placeholder="Precio mensual" required />
+          <input name="promocion" value={formData.promocion} onChange={handleChange} placeholder="Promoción" />
+          <input name="beneficios" value={formData.beneficios} onChange={handleChange} placeholder="Beneficios" />
 
-            <input
-              type="text"
-              name="velocidad"
-              placeholder="Velocidad"
-              value={formData.velocidad}
-              onChange={handleChange}
-              required
-            />
+          <button className="btn-primary">
+            {editando ? "Actualizar" : "Agregar"}
+          </button>
 
-            <textarea
-              name="descripcion"
-              placeholder="Descripción"
-              value={formData.descripcion}
-              onChange={handleChange}
-              required
-            />
-
-            <input
-              type="number"
-              name="precio_mensual"
-              placeholder="Precio mensual"
-              value={formData.precio_mensual}
-              onChange={handleChange}
-              required
-            />
-
-            <input
-              type="text"
-              name="promocion"
-              placeholder="Promoción"
-              value={formData.promocion}
-              onChange={handleChange}
-            />
-
-            <input
-              type="text"
-              name="beneficios"
-              placeholder="Beneficios"
-              value={formData.beneficios}
-              onChange={handleChange}
-            />
-
-            <button className="btn-primary" type="submit">
-              {editando ? "Actualizar paquete" : "Agregar paquete"}
+          {editando && (
+            <button type="button" className="btn-danger" onClick={() => setEditando(false)}>
+              Cancelar
             </button>
+          )}
+        </form>
 
-            {editando && (
-              <button
-                type="button"
-                className="btn-danger"
-                onClick={() => {
-                  setEditando(false);
-                  setFormData({
-                    nombre: "",
-                    velocidad: "",
-                    descripcion: "",
-                    precio_mensual: "",
-                    promocion: "",
-                    beneficios: "",
-                  });
-                }}
-              >
-                Cancelar edición
-              </button>
-            )}
-          </form>
+        <h1>Lista de Paquetes</h1>
 
-          {/* LISTA */}
-          <h1>Lista de Paquetes</h1>
+        <table className="clientes-table">
+          <thead>
+            <tr>
+              <th>Nombre</th>
+              <th>Velocidad</th>
+              <th>Precio</th>
+              <th>Promoción</th>
+              <th>Activo</th>
+              <th>Acciones</th>
+            </tr>
+          </thead>
 
-          <table className="clientes-table">
-            <thead>
-              <tr>
-                <th>Nombre</th>
-                <th>Velocidad</th>
-                <th>Precio</th>
-                <th>Promoción</th>
-                <th>Activo</th>
-                <th>Acciones</th>
+          <tbody>
+            {paquetes.map((p) => (
+              <tr key={p.id}>
+                <td>{p.nombre}</td>
+                <td>{p.velocidad}</td>
+                <td>${p.precio_mensual}</td>
+                <td>{p.promocion || "N/A"}</td>
+                <td>{p.activo ? "Sí" : "No"}</td>
+
+                <td>
+                  <button className="btn-edit" onClick={() => handleEdit(p)}>Editar</button>
+                  <button className="btn-danger" onClick={() => handleDelete(p.id)}>Eliminar</button>
+                </td>
               </tr>
-            </thead>
-
-            <tbody>
-              {paquetes.map((p) => (
-                <tr key={p.id}>
-                  <td>{p.nombre}</td>
-                  <td>{p.velocidad}</td>
-                  <td>${p.precio_mensual}</td>
-                  <td>{p.promocion || "N/A"}</td>
-                  <td>{p.activo ? "Sí" : "No"}</td>
-
-                  <td>
-                    <button className="btn-edit" onClick={() => handleEdit(p)}>
-                      Editar
-                    </button>
-                    <button className="btn-danger" onClick={() => handleDelete(p.id)}>
-                      Eliminar
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </Navbar>
-    </>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </Navbar>
   );
 }
-
-

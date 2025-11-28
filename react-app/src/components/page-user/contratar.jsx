@@ -233,6 +233,17 @@ function Contratacion() {
       lcl.contratos.push(numeroContrato);
       localStorage.setItem("usuario", JSON.stringify(lcl));
 
+      
+      await addDoc(collection(db, "notificaciones"), {
+        tipo: "contrato",
+        titulo: "Nuevo contrato generado",
+        descripcion: `Contrato de ${formData.nombre} ${formData.apellidos}`,
+        fecha: new Date(),
+        leido: false,
+        link: "/historialPagos",
+      });
+
+
       // Enviar correo
       await emailjs.send(
         "service_8nzlm6a",
@@ -261,6 +272,7 @@ function Contratacion() {
       console.error("Error:", err);
       alert("Hubo un problema al procesar tu contrato.");
     }
+
   };
 
   return (

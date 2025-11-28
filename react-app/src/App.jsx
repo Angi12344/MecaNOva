@@ -40,8 +40,8 @@ function App() {
         <Route path="/paquetesad" element={<Paquetesad />} />
         <Route path="/dashboard" element={<Dashboard />} />
         <Route path="/reportes" element={<ReportesAdmin />} />
-      <Route path="/registro" element={<Register />} />
-      <Route path="/historialPagos" element={<HistorialPagos />} />
+        <Route path="/registro" element={<Register />} />
+        <Route path="/historialPagos" element={<HistorialPagos />} />
 
     </Routes>
   );

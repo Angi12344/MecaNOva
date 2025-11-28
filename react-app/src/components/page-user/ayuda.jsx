@@ -63,6 +63,16 @@ function Ayuda() {
         fecha_creacion: serverTimestamp(),
       });
 
+       // ✔ Crear notificación para el usuario
+      await addDoc(collection(db, "notificaciones"), {
+        tipo: "reporte",
+        titulo: "Reporte enviado",
+        descripcion: `Reporte: ${formData.titulo}`,
+        usuario_uid: usuario.uid,
+        fecha: new Date(),
+        leido: false,
+        link: "/reportes" // 👈 página a la que llevará cuando haga clic
+      });
       // ✔ Enviar correo con EmailJS
       await emailjs.send(
         "service_8nzlm6a",
@@ -98,6 +108,7 @@ function Ayuda() {
       console.error("Error al enviar reporte:", error);
       alert("❌ Ocurrió un error al enviar el reporte.");
     }
+
   };
 
   return (
